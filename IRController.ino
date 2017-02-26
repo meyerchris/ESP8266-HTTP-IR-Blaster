@@ -3,6 +3,7 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
 #include <ESP8266HTTPClient.h>
+#include <WiFiUdp.h>
 
 //+=============================================================================
 // Please customize the following settings
@@ -11,22 +12,27 @@ const char* ssid = "WiFi SSID"; // WiFi SSID
 const char* password = "WiFi pass"; // WiFi password
 const char* passcode = "pass"; // Access code to send IR commands
 const int port = 8081; //  Receiving HTTP port
-IPAddress ip(10,0,1,10); // ESP8266 IP Address
-IPAddress dns(10,0,1,1); // DNS Server
-IPAddress gw(10,0,1,1); // Gateway
-IPAddress subnet(255,255,255,0); // Subnet
+
+// Only needed to hardcode IP (doesn't work with all routers)
+//IPAddress ip(10,0,1,10); // ESP8266 IP Address
+//IPAddress dns(10,0,1,1); // DNS Server
+//IPAddress gw(10,0,1,1); // Gateway
+//IPAddress subnet(255,255,255,0); // Subnet
+
+IPAddress bc(192,168,1,255); // Broadcast
 
 IRrecv irrecv(5); // Receiving pin
-IRsend irsend1(4); // Transmitting preset 1
+IRsend irsend1(13); // Transmitting preset 1
 IRsend irsend2(0); // Transmitting preset 2
 IRsend irsend3(12); // Transmitting preset 3
-IRsend irsend4(13); // Transmitting preset 4
+IRsend irsend4(4); // Transmitting preset 4
 //
 // End configuration area
 //+=============================================================================
 
 ESP8266WebServer server(port);
 HTTPClient http;
+WiFiUDP udp;
 
 //+=============================================================================
 // Setup web server and IR receiver/blaster
@@ -37,7 +43,7 @@ void setup() {
   Serial.println("ESP8266 IR Controller");
 
   // Begin WiFi
-  WiFi.config(ip, dns, gw, subnet); // Enable to hardcode an IP address
+  //WiFi.config(ip, dns, gw, subnet); // Enable to hardcode an IP address
   WiFi.begin(ssid, password);
 
   while (WiFi.status() != WL_CONNECTED) {
@@ -47,6 +53,8 @@ void setup() {
 
   Serial.println("WiFi connected");
   Serial.println(WiFi.localIP());
+
+  udp.begin(7);
 
   // Configure the server
   server.on("/json", []() { // JSON handler for more complicated IR blaster routines
@@ -87,6 +95,9 @@ void setup() {
         } else if (type == "roku") {
           String data = root[x]["data"];
           rokuCommand(ip, data);
+        } else if (type == "wol") {
+          String data = root[x]["data"];
+          wolCommand(data);
         } else {
           String data = root[x]["data"];
           long address = root[x]["address"];
@@ -124,6 +135,8 @@ void setup() {
 
       if (type == "roku") {
         rokuCommand(ip, data);
+      } else if (type == "wol") {
+        wolCommand(data);
       } else {
         irblast(type, data, len, rdelay, pulse, pdelay, repeat, address, pickIRsend(out));
       }
@@ -157,6 +170,31 @@ int rokuCommand(String ip, String data) {
   Serial.println("Sending roku command");
   return http.POST("");
   http.end();
+}
+
+//+=============================================================================
+// Send WOL magic packet
+//
+void wolCommand(String mac) {
+
+  byte preamble[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+
+  udp.beginPacket(bc, 7);
+  udp.write(preamble, sizeof preamble);
+
+  byte hw[6] = {0};
+  char separator = ':';
+  for (char i=0; i<6; i++) {
+    hw[i] = HexToLongInt(getValue(mac, separator, i));
+  }
+
+  for (char i=0; i<16; i++) {
+    udp.write(hw, sizeof hw);
+  }
+
+  Serial.println(mac);
+  Serial.println("Broadcasting wol command");
+  udp.endPacket();
 }
 
 //+=============================================================================
