@@ -1,3 +1,21 @@
+This project is a fork from the @mdhiggins [project](https://github.com/mdhiggins/ESP8266-HTTP-IR-Blaster/), with a few small tweaks:
+- Swaps GPIO pin for LEDs 1 and 4, since I burned out GPIO4
+- Adds a *wol* type, which takes a MAC address as *data* and broadcasts a magic packet
+
+A function to convert the NECx IR format to the HEX format used in the ESP code is also inclued. You can compile and run it using CMake:
+```
+mkdir build
+cd build
+cmake ..
+make
+./convert
+```
+or using a simple `g++` command:
+```
+g++ convert.C -o convert
+./convert
+```
+
 # ESP8266-HTTP-IR-Blaster V2
 ==============
 ESP8266 Compatible IR Blaster that accepts HTTP commands for use with services like Amazon Echo
